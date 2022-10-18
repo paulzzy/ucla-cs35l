@@ -4,7 +4,11 @@ import "./index.css";
 
 function Square(props) {
 	return (
-		<button className="square" onClick={props.onClick}>
+		<button
+			className="square"
+			onClick={props.onClick}
+			style={{ backgroundColor: props.bgColor }}
+		>
 			{props.value}
 		</button>
 	);
@@ -16,6 +20,7 @@ class Board extends React.Component {
 			<Square
 				value={this.props.squares[i]}
 				onClick={() => this.props.onClick(i)}
+				bgColor={this.props.bgColor(i)}
 			/>
 		);
 	}
@@ -54,25 +59,92 @@ class Game extends React.Component {
 			],
 			stepNumber: 0,
 			xIsNext: true,
+			selectedPiece: -1,
+			invalidMove: false,
 		};
+	}
+
+	adjacent(pieceIndex) {
+		if (this.state.selectedPiece === -1) {
+			return false;
+		}
+
+		const candidate = { x: pieceIndex % 3, y: Math.floor(pieceIndex / 3) };
+		const selected = {
+			x: this.state.selectedPiece % 3,
+			y: Math.floor(this.state.selectedPiece / 3),
+		};
+
+		const x_distance = Math.abs(candidate.x - selected.x);
+		const y_distance = Math.abs(candidate.y - selected.y);
+		const distance = x_distance + y_distance;
+
+		return distance === 1 || (x_distance === 1 && y_distance === 1);
 	}
 
 	handleClick(i) {
 		const history = this.state.history.slice(0, this.state.stepNumber + 1);
 		const current = history[history.length - 1];
 		const squares = current.squares.slice();
-		if (calculateWinner(squares) || squares[i]) {
+
+		const lapilliMode = this.state.stepNumber > 5; // True when pieces can only be moved
+		const hasSelected = this.state.pieceSelected === -1;
+		const playerSymbol = this.state.xIsNext ? "X" : "O";
+
+		const centerPiece = 4;
+		let invalidMove = false;
+
+		// Disallow board changes after a player wins
+		if (calculateWinner(squares)) {
 			return;
 		}
-		squares[i] = this.state.xIsNext ? "X" : "O";
+
+		let piece = squares[i];
+		let select = this.state.selectedPiece;
+
+		if (!lapilliMode && piece === null) {
+			// Place on empty square
+			squares[i] = playerSymbol;
+		} else if (lapilliMode && !hasSelected && squares[i] === playerSymbol) {
+			// Select one of current player's pieces
+			select = i;
+		} else if (lapilliMode && piece === null && this.adjacent(i)) {
+			const testSquares = squares.slice();
+			testSquares[i] = playerSymbol;
+			testSquares[this.state.selectedPiece] = null;
+
+			// If the center square has one of the current player's pieces, they must either win or move their center piece.
+			if (
+				squares[centerPiece] === playerSymbol &&
+				calculateWinner(testSquares) === null &&
+				this.state.selectedPiece !== centerPiece
+			) {
+				invalidMove = true;
+			}
+
+			// Move piece to an empty and adjacent square
+			squares[i] = playerSymbol;
+			squares[this.state.selectedPiece] = null;
+			select = -1;
+		} else {
+			return;
+		}
+
+		const updateBoard = select === -1 && !invalidMove;
+
 		this.setState({
-			history: history.concat([
-				{
-					squares: squares,
-				},
-			]),
-			stepNumber: history.length,
-			xIsNext: !this.state.xIsNext,
+			history: updateBoard
+				? history.concat([
+						{
+							squares: squares,
+						},
+				  ])
+				: history,
+			stepNumber: updateBoard ? history.length : history.length - 1,
+			// Only update when placing or moving
+			xIsNext: updateBoard ? !this.state.xIsNext : this.state.xIsNext,
+			selectedPiece: select,
+			invalidMove: invalidMove,
 		});
 	}
 
@@ -80,6 +152,8 @@ class Game extends React.Component {
 		this.setState({
 			stepNumber: step,
 			xIsNext: step % 2 === 0,
+			selectedPiece: -1,
+			invalidMove: false,
 		});
 	}
 
@@ -87,6 +161,9 @@ class Game extends React.Component {
 		const history = this.state.history;
 		const current = history[this.state.stepNumber];
 		const winner = calculateWinner(current.squares);
+
+		const normalColor = "#ffffff";
+		const highlightColor = "#cccccc";
 
 		const moves = history.map((step, move) => {
 			const desc = move ? "Go to move #" + move : "Go to game start";
@@ -101,7 +178,11 @@ class Game extends React.Component {
 		if (winner) {
 			status = "Winner: " + winner;
 		} else {
-			status = "Next player: " + (this.state.xIsNext ? "X" : "O");
+			status = `Next player: ${this.state.xIsNext ? "X" : "O"}${
+				this.state.invalidMove
+					? " — Invalid move: Either win or move from center."
+					: ""
+			}`;
 		}
 
 		return (
@@ -110,6 +191,9 @@ class Game extends React.Component {
 					<Board
 						squares={current.squares}
 						onClick={(i) => this.handleClick(i)}
+						bgColor={(i) =>
+							i === this.state.selectedPiece ? highlightColor : normalColor
+						}
 					/>
 				</div>
 				<div className="game-info">
