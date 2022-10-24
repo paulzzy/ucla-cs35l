@@ -1,0 +1,8 @@
+# `**/` ignores files in all directories
+
+# macOS
+**/.DS_Store
+
+# Non-code
+**/*.txt
+**/*.tgz
