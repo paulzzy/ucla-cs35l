@@ -3,7 +3,18 @@
 # macOS
 **/.DS_Store
 
-# Non-code
+# Non-code in all assignments
 **/*.txt
 **/*.tgz
+
+# Non-code in Assignment 2
 assign2/.venv
+
+# Non-code in Assignment 4
+assign4/0001-diff-lib-ignore-paths-that-are-outside-cwd-if-relati.patch
+assign4/2022d-2022e.diff
+assign4/2022d-2022e.html
+assign4/git-graph.pdf
+assign4/justone.out
+assign4/prevcur.html
+assign4/tzdb-2012j-2022e.tzcount
