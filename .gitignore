@@ -18,3 +18,6 @@ assign4/git-graph.pdf
 assign4/justone.out
 assign4/prevcur.html
 assign4/tzdb-2012j-2022e.tzcount
+
+# Non-code in Assignment 6
+assign6/.venv
