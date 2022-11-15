@@ -38,7 +38,17 @@ class GitRepo:
 
         return self.dir
 
+    def local_branches(self) -> list[str]:
+        """
+        Branches on the local computer.
+        """
+
+        os.chdir(f"{self.dir}/refs/heads")
+
+        return os.listdir()
+
 
 if __name__ == "__main__":
     repo = GitRepo()
     print(repo.location())
+    print(repo.local_branches())
