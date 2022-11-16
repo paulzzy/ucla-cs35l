@@ -23,10 +23,12 @@ class CommitNode:
         return self.commit_hash
 
     def __repr__(self) -> str:
-        return (
-            f"(commit_hash: {self.commit_hash}, "
-            f"parents: {self.parents}, "
-            f"children: {self.children})"
+        return ", ".join(
+            [
+                f"commit_hash: {self.commit_hash}",
+                # f"parents: {self.parents}",
+                # f"children: {self.children}",
+            ]
         )
 
     def get_commit_hash(self) -> str:
@@ -68,7 +70,13 @@ class GitRepo:
 
         self.dir: str = get_dot_git()
         self.local_branches: list[str] = get_local_branches()
+        self.branch_heads: dict[str, CommitNode] = {}
+        self.commits: list[CommitNode] = []
         self.root_commits: list[CommitNode] = []
+        self.topo_sorted_commits: list[CommitNode] = []
+
+        self.__build_commit_graph()
+        self.__topo_sort()
 
     def location(self):
         """
@@ -77,7 +85,7 @@ class GitRepo:
 
         return self.dir
 
-    def build_commit_graph(self) -> None:
+    def __build_commit_graph(self) -> None:
         """
         Builds commit graph of each local branch.
         """
@@ -103,7 +111,7 @@ class GitRepo:
                 with open(head_location, encoding="UTF-8") as head:
                     head_commits.append(CommitNode(head.read().strip()))
 
-                return head_commits
+            return head_commits
 
         def populate_tree(heads: list[CommitNode]) -> list[CommitNode]:
             """
@@ -118,10 +126,17 @@ class GitRepo:
 
             # Since two branches can have the same head commit, avoid including
             # duplicate commits by constructing from `existing`
-            unvisited: list[CommitNode] = list(existing.values())
+            dfs_stack: list[CommitNode] = list(existing.values())
+            visited: set[CommitNode] = set()
 
-            while unvisited:
-                current: CommitNode = unvisited.pop()
+            while dfs_stack:
+                current: CommitNode = dfs_stack.pop()
+
+                if current in visited:
+                    continue
+
+                visited.add(current)
+                self.commits.append(current)
 
                 try:
                     parent_hashes: list[str] = []
@@ -159,13 +174,13 @@ class GitRepo:
                         parent.children.add(current)
                         current.parents.add(parent)
 
-                        unvisited.append(parent)
+                        dfs_stack.append(parent)
 
                 except OSError as error:
                     print(
                         f"{os.path.basename(__file__)}: "
-                        f"This repository may be using packfiles, which is not supported. "
-                        f"Error: {error}",
+                        f"This repository may be using packfiles, which is not supported"
+                        f": {error}",
                         file=sys.stderr,
                     )
                     sys.exit(1)
@@ -174,12 +189,85 @@ class GitRepo:
 
         heads: list[CommitNode] = get_head_commits(self.local_branches)
 
+        for (head, branch) in zip(heads, self.local_branches):
+            self.branch_heads.setdefault(head.commit_hash, []).append(branch)
+
         self.root_commits.extend(populate_tree(heads))
 
-        print(self.root_commits)
+    def __topo_sort(self) -> None:
+        """
+        Generates a topological ordering of the commit graph.
+        """
+
+        num_parents: dict[CommitNode] = {
+            commit: len(commit.children) for commit in self.commits
+        }
+
+        dfs_queue: list[CommitNode] = [
+            commit for commit in self.commits if num_parents[commit] == 0
+        ]
+
+        while dfs_queue:
+            current = dfs_queue.pop(0)
+
+            for child in sorted(current.parents, key=lambda child: child.commit_hash):
+                num_parents[child] -= 1
+                if num_parents[child] == 0:
+                    dfs_queue.append(child)
+
+            self.topo_sorted_commits.append(current)
+
+        # print(self.topo_sorted_commits)
+
+    def __str__(self) -> str:
+        """
+        Converts topologically sorted commit graph to formatted string.
+        """
+
+        output: list[str] = []
+        prev: CommitNode = CommitNode("")
+
+        for commit in self.topo_sorted_commits:
+            current_line: str = f"{commit.commit_hash}"
+
+            # When current commit is not a parent of the previous, add a "sticky
+            # end" and "sticky start" to indicate how to reconstruct the commit
+            # graph. The sticky parts include information on the previous
+            # commit's parents and the current commit's children.
+            #
+            # Format of sticky end:
+            # ```
+            # parent_1 parent_2 ... parent_n=
+            # ```
+            #
+            # Format of sticky start:
+            # ```
+            #
+            # =child_1 child_2 ... child_n
+            # ```
+            if prev not in commit.children and len(commit.children) > 0:
+                sticky_end: str = (
+                    f"{' '.join([parent.commit_hash for parent in prev.parents])}="
+                )
+                sticky_start: str = (
+                    f"\n\n="
+                    f"{' '.join([child.commit_hash for child in commit.children])}\n"
+                )
+                current_line = f"{sticky_end}{sticky_start}{current_line}"
+
+            if commit.commit_hash in self.branch_heads:
+                branch_names = sorted(
+                    self.branch_heads[commit.commit_hash], key=lambda branch: branch
+                )
+                current_line = f"{current_line} {' '.join(branch_names)}"
+
+            output.append(current_line)
+
+            prev = commit
+
+        return "\n".join(output)
 
 
 if __name__ == "__main__":
     repo = GitRepo()
-    print(repo.location())
-    repo.build_commit_graph()
+    print(repo)
