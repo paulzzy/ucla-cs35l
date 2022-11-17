@@ -31,13 +31,6 @@ class CommitNode:
             ]
         )
 
-    def get_commit_hash(self) -> str:
-        """
-        Returns the commit hash.
-        """
-
-        return self.commit_hash
-
     def object_path(self) -> str:
         """
         Assumes the current working directory is .git, returns the relative path
@@ -66,13 +59,24 @@ class GitRepo:
 
         def get_local_branches() -> list[str]:
             os.chdir(f"{self.dir}/{REFS_HEADS}")
-            return os.listdir()
+
+            branches = []
+
+            for branch in os.listdir():
+                nested: str = branch
+
+                while os.path.isdir(nested):
+                    nested = os.listdir(nested)[0]
+                    branch = f"{branch}/{nested}"
+
+                branches.append(branch)
+
+            return branches
 
         self.dir: str = get_dot_git()
         self.local_branches: list[str] = get_local_branches()
-        self.branch_heads: dict[str, CommitNode] = {}
+        self.branch_heads: dict[str, list[str]] = {}
         self.commits: list[CommitNode] = []
-        self.root_commits: list[CommitNode] = []
         self.topo_sorted_commits: list[CommitNode] = []
 
         self.__build_commit_graph()
@@ -119,10 +123,8 @@ class GitRepo:
             commit. Returns a list of root commits (those with no parents).
             """
 
-            root_commits: list[CommitNode] = []
-            existing: dict[CommitNode] = {
-                head.get_commit_hash(): head for head in heads
-            }
+            commits: list[CommitNode] = []
+            existing: dict[str, CommitNode] = {head.commit_hash: head for head in heads}
 
             # Since two branches can have the same head commit, avoid including
             # duplicate commits by constructing from `existing`
@@ -136,7 +138,7 @@ class GitRepo:
                     continue
 
                 visited.add(current)
-                self.commits.append(current)
+                commits.append(current)
 
                 try:
                     parent_hashes: list[str] = []
@@ -159,10 +161,6 @@ class GitRepo:
                                 # to exit early.
                                 break
 
-                    # `current` has no parents, so it's a leaf node
-                    if not parent_hashes:
-                        root_commits.append(current)
-
                     for parent_hash in parent_hashes:
                         parent: CommitNode
 
@@ -170,6 +168,7 @@ class GitRepo:
                             parent = existing[parent_hash]
                         else:
                             parent = CommitNode(parent_hash)
+                            existing[parent_hash] = parent
 
                         parent.children.add(current)
                         current.parents.add(parent)
@@ -185,21 +184,21 @@ class GitRepo:
                     )
                     sys.exit(1)
 
-            return root_commits
+            return commits
 
         heads: list[CommitNode] = get_head_commits(self.local_branches)
 
         for (head, branch) in zip(heads, self.local_branches):
             self.branch_heads.setdefault(head.commit_hash, []).append(branch)
 
-        self.root_commits.extend(populate_tree(heads))
+        self.commits = populate_tree(heads)
 
     def __topo_sort(self) -> None:
         """
         Generates a topological ordering of the commit graph.
         """
 
-        num_parents: dict[CommitNode] = {
+        num_parents: dict[CommitNode, int] = {
             commit: len(commit.children) for commit in self.commits
         }
 
@@ -271,8 +270,7 @@ def topo_order_commits():
     Used by instructor-provided test suite.
     """
 
-    repo = GitRepo()
-    print(repo)
+    print(GitRepo())
 
 
 if __name__ == "__main__":
