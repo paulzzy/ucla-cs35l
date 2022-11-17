@@ -217,8 +217,6 @@ class GitRepo:
 
             self.topo_sorted_commits.append(current)
 
-        # print(self.topo_sorted_commits)
-
     def __str__(self) -> str:
         """
         Converts topologically sorted commit graph to formatted string.
@@ -268,6 +266,14 @@ class GitRepo:
         return "\n".join(output)
 
 
-if __name__ == "__main__":
+def topo_order_commits():
+    """
+    Used by instructor-provided test suite.
+    """
+
     repo = GitRepo()
     print(repo)
+
+
+if __name__ == "__main__":
+    topo_order_commits()

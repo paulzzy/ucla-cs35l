@@ -21,3 +21,8 @@ assign4/tzdb-2012j-2022e.tzcount
 
 # Non-code in Assignment 6
 assign6/.venv
+
+# Instructor-provided test suite, which I don't have permission to share
+assign6/tests
+assign6/__pycache__
+assign6/.pytest_cache
