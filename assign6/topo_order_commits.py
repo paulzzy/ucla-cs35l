@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+"""
+To verify my implementation doesn't use other commands, I ran `strace -f -e
+execve -o lmao.trace pytest` (with the testing environment properly set up) and
+then examined the resultant lmao.trace file.
+
+If the only line containing "execve" indicates that `pytest` was called, then no
+other commands were called and my implementation is spec-compliant.
+"""
+
 import os
 import sys
 import zlib
