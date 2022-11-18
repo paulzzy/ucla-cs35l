@@ -198,21 +198,26 @@ class GitRepo:
         Generates a topological ordering of the commit graph.
         """
 
-        num_parents: dict[CommitNode, int] = {
+        num_children: dict[CommitNode, int] = {
             commit: len(commit.children) for commit in self.commits
         }
 
-        dfs_queue: list[CommitNode] = [
-            commit for commit in self.commits if num_parents[commit] == 0
+        dfs_stack: list[CommitNode] = [
+            commit for commit in self.commits if num_children[commit] == 0
         ]
 
-        while dfs_queue:
-            current = dfs_queue.pop(0)
+        # Ensure output is deterministic
+        dfs_stack.sort(key=lambda commit: commit.commit_hash)
 
-            for child in sorted(current.parents, key=lambda child: child.commit_hash):
-                num_parents[child] -= 1
-                if num_parents[child] == 0:
-                    dfs_queue.append(child)
+        while dfs_stack:
+            current = dfs_stack.pop()
+
+            for parent in sorted(
+                current.parents, key=lambda parent: parent.commit_hash
+            ):
+                num_children[parent] -= 1
+                if num_children[parent] == 0:
+                    dfs_stack.append(parent)
 
             self.topo_sorted_commits.append(current)
 
@@ -222,7 +227,7 @@ class GitRepo:
         """
 
         output: list[str] = []
-        prev: CommitNode = CommitNode("")
+        prev: CommitNode | None = None
 
         for commit in self.topo_sorted_commits:
             current_line: str = f"{commit.commit_hash}"
@@ -242,7 +247,7 @@ class GitRepo:
             #
             # =child_1 child_2 ... child_n
             # ```
-            if prev not in commit.children and len(commit.children) > 0:
+            if prev and prev not in commit.children:
                 sticky_end: str = (
                     f"{' '.join([parent.commit_hash for parent in prev.parents])}="
                 )
